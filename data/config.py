@@ -15,6 +15,7 @@ FLEET_LOGIN: str = env.str("FLEET_LOGIN")
 FLEET_PASSWORD: str = env.str("FLEET_PASSWORD")
 FLEET_ACCOUNT_ID: str = env.str("FLEET_ACCOUNT_ID")
 GOOGLE_API: str = env.str("GOOGLE_API")
+ROADREADY_TOKEN = env.str("ROADREADY_TOKEN")
 SWIFTELD_TOKEN: str = env.str("SWIFTELD_TOKEN")
 IP: str = env.str("IP")  # Xosting ip manzili
 DB_URL = env.str("DATABASE_URL") # postgresql

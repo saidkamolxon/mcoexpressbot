@@ -2,13 +2,14 @@ from datetime import datetime
 from aiogram.types import (
     Message, ContentType, InputMediaPhoto, InputMediaVideo,
     InputMediaDocument, InputMediaAnimation, InputMediaAudio)
-
+import pytz
 
 async def get_id(message_text: str):
     return message_text.split('\n')[:-1]
 
 
 def is_file_typed(message: Message):
+    message.html_text
     if message.content_type in [ContentType.DOCUMENT, ContentType.AUDIO]:
         return True
     return False
@@ -51,8 +52,8 @@ def get_caption(message: Message):
     return f'{caption}\n\n<b>{id}</b>'
 
 
-def convert_date(date_str):
-    date = datetime.strptime(date_str, '%m-%d-%Y %I:%M %p')
+def convert_date(date_str, format: str = '%m-%d-%Y %I:%M %p'): # Default format is for SWIFTELD format
+    date = datetime.strptime(date_str, format)
     return date.strftime('%d-%b %H:%M')
 
 
@@ -83,3 +84,18 @@ async def binarySearch(lists, x):
         else:
             return mid
     return -1
+
+
+async def get_current_time(time_in_utc = None, timezone: str = 'US/Eastern'):
+    if time_in_utc:
+        time_in_utc = datetime.strptime(time_in_utc, '%Y-%m-%d %H:%M:%S')
+    else: # equals to if time_in_utc = None
+        time_in_utc = datetime.utcnow()
+    timezone = pytz.timezone(timezone)
+    current_time = time_in_utc.replace(tzinfo=pytz.utc).astimezone(timezone)
+    return datetime.strftime(current_time, '%m-%d-%Y %H:%M:%S')
+
+
+async def get_converted_date(date_string):
+    format = "%m-%d-%Y %H:%M:%S"
+    return datetime.strptime(date_string, format)

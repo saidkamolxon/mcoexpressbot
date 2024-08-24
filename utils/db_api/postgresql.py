@@ -1,8 +1,10 @@
 import asyncpg
+import logging
 from typing import Union
 from asyncpg import Connection
 from asyncpg.pool import Pool
-from data.config import DB_URL, DB_USER, DB_PASS, DB_HOST, DB_NAME, DB_PORT
+from data.config import DB_USER, DB_PASS, DB_HOST, DB_NAME, DB_PORT
+from utils.common_functions import get_current_time, get_converted_date
 
 
 class CoreSQL:
@@ -57,7 +59,7 @@ class CoreSQL:
 
     async def create_table_facilities(self):
         sql = """CREATE TABLE IF NOT EXISTS facilities (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT UNIQUE,
         address TEXT
 );
@@ -89,8 +91,8 @@ class CoreSQL:
         """
         try:
             return await self.execute(sql, user_id, full_name, username, is_admin, fetchone=True)
-        except:
-            pass
+        except Exception as ex:
+            logging.error(ex)
 
     async def get_users(self, only_admins=False):
         sql = "SELECT user_id, name FROM users"
@@ -109,14 +111,15 @@ class CoreSQL:
         data = await self.execute(sql, fetchall=True)
         return {f'gr_{i[0]}': i[1] for i in data}
 
-    async def get_chats(self, group: str) -> dict | int:
+    async def get_chats(self, group: str) -> Union[dict, int]:
         sql = f"""
-        SELECT * FROM '{group}' WHERE is_active = true
+        SELECT * FROM "{group}" WHERE is_active = true
         """
         try:
             data = await self.execute(sql, fetchall=True)
             return {i[0]: i[1] for i in data}
-        except:
+        except Exception as ex:
+            logging.error(ex)
             return -1
 
     # region ADDING --->>> ###
@@ -128,8 +131,8 @@ class CoreSQL:
 """
         try:
             return await self.execute(sql, execute=True)
-        except:
-            pass
+        except Exception as ex:
+            logging.error(ex)
 
     async def add_a_group(self, group_name: str):
         await self.create_table_groups()
@@ -138,32 +141,71 @@ class CoreSQL:
 """
         await self.execute(sql, execute=True)
 
-    async def add_to_facilities(self, facility: str, address: str):
-        '''This function adds the given facility to the await db. If it is found,
-        so it will update that facility...'''
+    async def add_to_facilities(self, facility: str, address: str, points: str,
+                                city: str, state: str, zip_code: str, coordinates: str):
+        """This function adds the given facility to the await db. If it is found,
+        so it will update that facility..."""
         sql = f"""
-        UPDATE facilities SET address = '{address}' WHERE name = '{facility}';
+        UPDATE
+            facilities
+        SET 
+            address = '{address}',
+            points = '{points}',
+            city = '{city}',
+            state = '{state}',
+            zip = '{zip_code}',
+            coordinates = '{coordinates}'
+        WHERE
+            name = '{facility}';
 """
-        r = await self.execute(sql, execute=True)
-        if not r:
+        r: str = await self.execute(sql, execute=True)
+        if '0' in r:
             sql = f"""
-            INSERT INTO facilities(name, address) VALUES('{facility}', '{address}');
+            INSERT INTO 
+                facilities(name, address, points, city, state, zip, coordinates) 
+            VALUES('{facility.upper()}', '{address}', '{points}', '{city}', '{state}', '{zip}', '{coordinates}');
 """
             await self.execute(sql, execute=True)
+
+    async def update_trailers(self, name: str, coordinates: str, location: str,
+                              landmark: str = '', is_moving: bool = False,
+                              last_event: str = '', last_update: str = ''):
+
+        address = location.replace("'", "-") if "'" in location else location
+
+        sql = f"""
+        UPDATE
+            trailers
+        SET 
+            coordinates = '{coordinates}',
+            location = '{address}',
+            landmark = '{landmark}',
+            is_moving = '{is_moving}',
+            last_event = '{last_event}',
+            last_update = '{last_update}'
+        WHERE
+            name = '{name}'
+            AND
+            (
+                last_event IS NULL
+                OR CAST(last_event AS TIMESTAMP) <= CAST('{last_event}' AS TIMESTAMP)
+            );
+"""
+        await self.execute(sql, execute=True)
 
     async def add_to_chats(self, group: str, chat_id: str, chat_title: str) -> None:
         """This func adds the given chat one of the group of chats"""
         await self.create_table_chats(group)
         sql = f"""
-        INSERT INTO '{group}' 
+        INSERT INTO {group} 
         VALUES('{chat_id}',
                '{chat_title}',
-               1)         
+               true)         
 """
         try:
             await self.execute(sql, execute=True)
-        except:
-            pass
+        except Exception as ex:
+            logging.error(ex)
 
     # endregion
 
@@ -232,23 +274,81 @@ class CoreSQL:
         result: list = await self.execute(sql, fetchall=True)
         return result
 
+    async def get_landmarks(self):
+        facilities = dict()
+        try:
+            data = await self.execute("SELECT name, address FROM facilities;", fetchall=True)
+        except Exception as ex:
+            logging.error(ex)
+            return -1
+        else:
+            for fac, add in data:
+                facilities[fac] = {'address': add}
+            return facilities
 
-# async def logger(statement):
-#     print(f"""
-# ------------------------------------------------------
-# Executing:
-# {statement}
-# ------------------------------------------------------
-# """)
+    async def get_trailer(self, trailer_name: str):
+        sql = f"""
+        SELECT
+            name, coordinates, location, landmark, is_moving, last_event, last_update
+        FROM 
+            trailers
+        WHERE
+            name LIKE '%{trailer_name}%'
+"""
+        result = await self.execute(sql, fetchone=True)
+        if not result:
+            return -1
+        trl = dict()
+        trl['name'], trl['coordinates'], trl['location'], trl['landmark'], trl['is_moving'] = result[:5]
+        trl['last_event'] = await get_converted_date(result[5])
+        trl['last_update'] = await get_converted_date(result[6])
+        return trl
 
-#
-# import asyncio
-# from pprint import pprint as print
-#
-# async def main():
-#     db = CoreSQL()
-#     await await db.create()
-#     result = await await db.add_to_users('3221', 'test', False)
-#     print(result)
-#
-# asyncio.run(main())
+    async def get_landmark(self, landmark_name: str):
+        sql = f"""
+        SELECT
+            name, address, coordinates
+        FROM
+            facilities
+        WHERE
+            name LIKE '%{landmark_name}%';
+"""
+        result = await self.execute(sql, fetchall=True)
+        if not result:
+            return -1
+        return list(result)
+
+    async def get_trailers_by_landmark(self, landmark: str):
+        sql = f"""
+        SELECT
+            name, coordinates
+        FROM
+            trailers
+        WHERE
+            landmark = '{landmark}'
+        ORDER BY
+            name
+"""
+        result = await self.execute(sql, fetchall=True)
+        if not result:
+            return -1
+        return list(result)
+
+    async def get_all_trailers(self):
+        current_est_time = await get_current_time()
+        sql = f"""
+        SELECT
+            name, is_moving, landmark, location, coordinates
+        FROM
+            trailers
+        WHERE
+            last_update IS NOT NULL
+            OR
+            CAST(last_update AS TIMESTAMP) + INTERVAL '3 days' < CAST('{current_est_time}' AS TIMESTAMP) 
+        ORDER BY
+            name
+"""
+        result = await self.execute(sql, fetchall=True)
+        if not result:
+            return -1
+        return list(result)

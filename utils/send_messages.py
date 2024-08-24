@@ -6,6 +6,7 @@ from loader import dp, db
 async def send_messages(gr_chats: str, message: Message, is_media_group=False, media: dict = None) -> None:
     if media is None:
         media = dict()
+    print(gr_chats)
     chats: dict = await db.get_chats(gr_chats)
     if chats == -1:
         await message.reply('Not found any chat in this group')

@@ -4,19 +4,20 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aiogram = "*"
-crontab = "*"
-aioschedule = "*"
-apscheduler = "*"
-aioscheduler = "*"
+aiogram = "2.25.1"
+crontab = "1.0.1"
+aioschedule = "0.5.2"
+apscheduler = "3.10.4"
+aioscheduler = "1.4.2"
 requests = "*"
-aiogram-media-group = "*"
-environs = "*"
-asyncpg = "*"
+aiogram-media-group = "0.5.1"
+environs = "9.5.0"
+asyncpg = "0.28.0"
 prettytable = "*"
-aiogram-dialog = "*"
+aiogram-dialog = "1.9.0"
 sqlalchemy = "*"
-alembic = "*"
+alembic = "1.11.3"
+shapely = "2.0.3"
 
 [dev-packages]
 

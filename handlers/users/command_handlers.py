@@ -2,13 +2,14 @@ import requests
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from data.config import OWNER_ID
-from loader import dp, db, fl, sw
+from loader import dp, db, fl, sw, bot
 from states.states import AllStates
-from utils.apis.GoogleTimeZone import GoogleTimeZone
+from utils.apis.google_maps import TimeZone
+from utils.fleet_config import get_trailer
 
 
 # Getting all trailer info
-@dp.message_handler(commands=['all_trl_info', 'alltrlinfo', 'alltrlloc'])
+@dp.message_handler(commands='all_trl_info')
 async def all_trailer_info(message: types.Message):
     msg1, msg2, msg3 = await fl.get_all_assets_info()
     await message.answer(text=msg1)
@@ -18,7 +19,7 @@ async def all_trailer_info(message: types.Message):
 
 @dp.message_handler(commands='get_odometers')
 async def get_odometers(message: types.Message):
-    res = await sw.get_odomoters()
+    res = await sw.get_odometers()
     await message.answer(res)
 
 
@@ -45,8 +46,8 @@ async def delete_user(message: types.Message, state: FSMContext):
     if str(message.chat.id) == OWNER_ID:
         msg, n = 'Copy one of these user ids & input it in order to delete user:\n\n', 1
         users = await db.get_users()
-        for id, name in users.items():
-            msg += f'{n}. <b>{name}</b> - <code>{id}</code>\n'
+        for _id, _name in users.items():
+            msg += f'{n}. <b>{_name}</b> - <code>{_id}</code>\n'
             n += 1
         msg += '\nSend /cancel to cancel.'
         await message.answer(msg)
@@ -59,8 +60,8 @@ async def make_admin(message: types.Message, state: FSMContext):
     if str(message.chat.id) == OWNER_ID:
         msg, n = 'Copy one of these user ids & input it in order to make user an admin:\n\n', 1
         users = await db.get_users()
-        for id, name in users.items():
-            msg += f'{n}. <b>{name}</b> - <code>{id}</code>\n'
+        for _id, _name in users.items():
+            msg += f'{n}. <b>{_name}</b> - <code>{_id}</code>\n'
             n += 1
         msg += '\nSend /cancel to cancel.'
         await message.answer(msg)
@@ -152,7 +153,7 @@ async def deactivate(message: types.Message):
 @dp.message_handler(commands='distance')
 async def measure_distance(message: types.Message, state: FSMContext):
     await state.finish()
-    await message.reply('Current adress: ')
+    await message.reply('Current address: ')
     await AllStates.md_origin.set()
 
 
@@ -181,7 +182,7 @@ async def get_trailer_loc(message: types.Message, state: FSMContext):
         source = 'bing'
     else:
         asset = text.split('/G')[-1].strip()
-    trl = await fl.get_asset_location(asset,source)
+    trl = await get_trailer(db, asset, source)
     if trl == -1:
         await message.answer('Not found.')
     else:
@@ -193,13 +194,20 @@ async def get_trailer_loc(message: types.Message, state: FSMContext):
 async def update_facilities(message: types.Message, state: FSMContext):
     if str(message.chat.id) == OWNER_ID:
         await state.finish()
-        await message.answer(await fl.update_facilities())
+        result = await fl.update_facilities()
+        await message.answer(result)
+
+
+@dp.message_handler(commands=['delete'])
+async def delete_own_message(message: types.Message):
+    message_id = message.text.split('/delete')[-1].strip()
+    await bot.delete_message(message_id=message_id)
 
 
 @dp.message_handler(commands='time_in')
 async def get_local_time(message: types.Message):
     location = message.text.split('/time_in')[-1].strip()
-    result:dict = await GoogleTimeZone(location).get_time()
+    result: dict = await TimeZone(location).get_time()
     await message.reply(
         f"""
 <b>Local time:</b> {result.get('time')}
@@ -220,7 +228,7 @@ async def get_local_time(message: types.Message):
     else:
         location = f"{res.get('lat')},{res.get('lng')}"
         city = res.get('city')
-        result : dict = await GoogleTimeZone(location).get_time()
+        result: dict = await TimeZone(location).get_time()
         await message.reply(
             f"""
 <b>Region:</b> {city}
